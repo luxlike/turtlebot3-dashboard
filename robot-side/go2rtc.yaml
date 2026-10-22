@@ -1,0 +1,22 @@
+# go2rtc — 카메라를 go2rtc 가 직접 여는 구성 (walle_vision 을 안 쓸 때)
+#   walle_vision 과 함께 쓸 때는 카메라를 camera_ros 가 이미 열고 있으므로
+#   image_to_rtsp.py + MediaMTX 구성(mediamtx.yml)을 쓰세요.
+#
+#   다운로드: https://github.com/AlexxIT/go2rtc/releases (go2rtc_linux_arm64)
+#   실행:     ./go2rtc -config go2rtc.yaml
+#   대시보드:  http://<로봇IP>:1984/api/webrtc?src=cam   (WHEP 호환 POST application/sdp)
+
+api:
+  listen: ":1984"
+  origin: "*"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - stun:8555          # 잘 안 붙으면 로봇 IP 를 직접: 192.168.0.50:8555
+
+streams:
+  # USB 웹캠 (MJPEG 입력 → H.264). #hardware 는 Pi 4 의 v4l2m2m 인코더 사용 시도
+  cam: ffmpeg:device?video=/dev/video0&input_format=mjpeg&video_size=640x480#video=h264#hardware
+  # Pi Camera (rpicam-apps 가 설치된 경우)
+  # cam: exec:rpicam-vid -t 0 -n --inline --width 640 --height 480 --framerate 30 --codec h264 -o -

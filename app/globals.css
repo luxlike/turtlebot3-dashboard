@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #070a0e;
+  --color-ink-900: #0b1016;
+  --color-ink-850: #0f151d;
+  --color-ink-800: #141c26;
+  --color-ink-700: #1d2835;
+  --color-ink-600: #2a3747;
+  --color-ink-400: #6b7c8f;
+  --color-ink-300: #93a3b5;
+  --color-ink-100: #dbe4ee;
+  --color-signal: #2ee6c5;
+  --color-signal-dim: #1a8f7c;
+  --color-amber: #f5b33d;
+  --color-alert: #ff4d4f;
+  --font-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, monospace;
+}
+
+html, body { background: var(--color-ink-950); color: var(--color-ink-100); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+/* 패널 배경에 아주 옅은 계측 격자 */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.leaflet-container { background: #0b1016 !important; font-family: var(--font-sans); }
+.leaflet-control-attribution { background: rgb(11 16 22 / 0.7) !important; color: #6b7c8f !important; }
+.leaflet-control-attribution a { color: #93a3b5 !important; }
+.leaflet-bar a { background: #141c26 !important; color: #dbe4ee !important; border-color: #2a3747 !important; }
+.robot-marker { transition: none; }
+
+input[type="range"] { accent-color: var(--color-signal); }
+
+@keyframes blink { 50% { opacity: 0.35; } }
+.blink { animation: blink 1.2s steps(2) infinite; }

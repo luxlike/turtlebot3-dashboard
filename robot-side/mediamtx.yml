@@ -1,0 +1,26 @@
+# MediaMTX — image_to_rtsp.py 가 RTSP 로 밀어 넣은 영상을 WebRTC(WHEP)로 내보냄
+#   다운로드: https://github.com/bluenviron/mediamtx/releases (mediamtx_vX.Y.Z_linux_arm64.tar.gz, v1.21.2 에서 확인)
+#   실행:     ./mediamtx mediamtx.yml
+#   대시보드:  http://<로봇IP>:8889/cam/whep
+
+logLevel: info
+
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp]
+
+rtmp: false
+hls: false
+srt: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcAllowOrigins: ["*"]       # 대시보드가 다른 출처(포트)에서 열리므로
+webrtcLocalUDPAddress: :8189
+# 로봇이 여러 IP 를 가질 때 브라우저가 붙을 수 있는 주소를 명시 (Wi-Fi IP)
+webrtcAdditionalHosts: []        # 예) [192.168.0.50]
+webrtcICEServers2: []            # 같은 LAN 이면 비워 두기. 외부망은 TURN 필요
+
+paths:
+  cam:
+    source: publisher

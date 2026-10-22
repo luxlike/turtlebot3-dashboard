@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+__pycache__/
+*.pyc
+robot-side/mediamtx
+robot-side/*.tar.gz

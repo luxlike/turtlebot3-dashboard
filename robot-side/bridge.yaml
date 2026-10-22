@@ -1,0 +1,30 @@
+# ros2_mqtt_bridge.py 설정 — 대시보드 설정의 prefix / 로봇 ID 와 맞추세요
+broker:
+  host: localhost        # 브로커를 PC/서버에 두면 그 IP
+  port: 1883
+  username: ""
+  password: ""
+prefix: robots
+robot_id: tb3_01
+cmd_vel_topic: /cmd_vel
+
+# 로봇 → 웹. rate_hz 로 Wi-Fi 대역폭을 아낍니다 (LaserScan 360점 ≈ 7 KB/메시지)
+outbound:
+  - { topic: /odom,                 type: nav_msgs/msg/Odometry,                         rate_hz: 15, sensor: true }
+  - { topic: /scan,                 type: sensor_msgs/msg/LaserScan,                     rate_hz: 5,  sensor: true }
+  - { topic: /battery_state,        type: sensor_msgs/msg/BatteryState,                  rate_hz: 1,  sensor: true }
+  - { topic: /joint_states,         type: sensor_msgs/msg/JointState,                    rate_hz: 15 }
+  - { topic: /amcl_pose,            type: geometry_msgs/msg/PoseWithCovarianceStamped,   rate_hz: 5 }
+  - { topic: /map,                  type: nav_msgs/msg/OccupancyGrid,                    rate_hz: 0.2, latched: true }
+  - { topic: /fix,                  type: sensor_msgs/msg/NavSatFix,                     rate_hz: 2,  sensor: true }
+  - { topic: /walle/status,         type: std_msgs/msg/String,                           rate_hz: 5 }
+  - { topic: /walle/vision/status,  type: std_msgs/msg/String,                           rate_hz: 4 }
+
+# 웹 → 로봇 — 여기 적힌 토픽만 통과합니다
+inbound:
+  - { topic: /cmd_vel,          type: geometry_msgs/msg/Twist }          # TwistStamped 를 쓰는 bringup 이면 바꾸기
+  - { topic: /walle/command,    type: std_msgs/msg/String }
+  - { topic: /walle/drive_mode, type: std_msgs/msg/String }
+  - { topic: /goal_pose,        type: geometry_msgs/msg/PoseStamped }
+  - { topic: /walle/pick_point, type: geometry_msgs/msg/PointStamped }
+  - { topic: /walle/place_point, type: geometry_msgs/msg/PointStamped }
