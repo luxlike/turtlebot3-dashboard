@@ -11,7 +11,8 @@
                                       ├─ tb3@rosbridge   ws://<로봇IP>:9090
                                       ├─ tb3@mediamtx    WebRTC :8889  (로봇 IP 자동 등록)
                                       ├─ tb3@video       image_to_rtsp.py (MediaMTX 가 열릴 때까지 대기)
-                                      └─ 선택: vision · arm · mqtt · dashboard
+                                      ├─ tb3@dashboard   ~/dashboard/start_dash.sh (있으면 자동 포함)
+                                      └─ 선택: vision · arm · mqtt
 ```
 
 ---
@@ -36,6 +37,7 @@ sudo ./install.sh --download-mediamtx --now
 2. MediaMTX v1.21.2 를 아키텍처에 맞게 받아 `robot-side/mediamtx` 에 저장
 3. 설정 파일 `/etc/tb3/robot.env` 생성 (이미 있으면 그대로 둠)
 4. `tb3@.service`, `tb3.target` 설치, `tb3ctl` 명령 등록, 부팅 시 자동 실행 등록
+5. `~/dashboard/start_dash.sh` 가 있으면 **관제 대시보드도 자동 실행에 포함**
 
 **경고(!)가 나오면 먼저 해결**하세요. 예: `rosbridge 미설치`, `MediaMTX 실행 파일이 없습니다`.
 
@@ -102,18 +104,43 @@ sudo reboot
 | `vision` | walle_vision (idle 로 시작 → 대시보드에서 모드 선택) | `VISION_CMD` 의 profile 확인 |
 | `arm` | walle_arm 월-E 팔 노드 | walle_arm 빌드, 팔 bringup 구성 |
 | `mqtt` | ROS 2 ↔ MQTT 브리지 | mosquitto 설치, `bridge.yaml` |
-| `dashboard` | 로봇이 대시보드를 직접 서비스 → `http://<로봇IP>:3000` | PC 에서 `npm run build` 후 `out/` 를 로봇의 `~/turtlebot3-dashboard/out` 으로 복사 |
 
-`dashboard` 를 켜고 `http://<로봇IP>:3000` 으로 접속하면, 처음 열 때 **같은 로봇의 rosbridge·영상으로 자동 연결**됩니다
-(설정 입력 불필요). 휴대폰으로 바로 관제할 때 편합니다.
+### 관제 대시보드 (`dashboard`)
 
+로봇이 켜질 때 **`~/dashboard/start_dash.sh`** 를 실행해 대시보드도 함께 띄웁니다.
+설치할 때 이 파일이 있으면 자동으로 포함되고, 나중에 만들었다면 `sudo tb3ctl enable dashboard` 로 켜면 됩니다.
+
+- 스크립트는 **자기 폴더(`~/dashboard`)에서** 실행되므로 상대 경로를 그대로 써도 됩니다.
+- 실행 권한이 있으면(`chmod +x`) 스크립트 첫 줄(shebang)대로, 없으면 `bash` 로 실행합니다.
+- nvm 으로 설치한 node/npm 도 찾도록 `~/.nvm/nvm.sh` 와 `~/.local/bin` 을 경로에 넣습니다.
+- 스크립트가 서버를 **앞에서 계속 실행**하든(`exec npm start`, `python3 -m http.server 3000` 등),
+  **`&` 로 띄우고 끝나든** 둘 다 됩니다. 뒤의 경우 띄운 서버가 살아 있는 동안 서비스가 유지되고,
+  서버가 죽으면 5초 뒤 스크립트를 다시 실행합니다.
+- `sudo tb3ctl stop dashboard` 나 재부팅 때 스크립트가 띄운 프로세스까지 함께 정리합니다.
+- 스크립트 위치를 바꾸려면 `/etc/tb3/robot.env` 의 `DASHBOARD_SCRIPT` 를 고치세요.
+  스크립트가 없으면 `DASHBOARD_DIR`(빌드한 `out/`)을 `DASHBOARD_PORT` 로 바로 서비스합니다.
+
+예시 `~/dashboard/start_dash.sh`:
 ```bash
-# [PC]
-npm run build
-scp -r out <user>@<로봇IP>:~/turtlebot3-dashboard/
-# [SBC]
-sudo tb3ctl enable dashboard
+#!/bin/bash
+# 빌드한 정적 파일(out/)을 3000 포트로
+exec python3 -m http.server 3000 --directory out
 ```
+```bash
+#!/bin/bash
+# Next.js 프로젝트를 그대로 둔 경우
+exec npm run start -- -p 3000       # 먼저 npm run build 필요 (output: export 설정이면 위 예시 사용)
+```
+
+확인:
+```bash
+tb3ctl status            # dashboard active + "대시보드 주소: http://<로봇IP>:3000"
+tb3ctl logs dashboard    # 스크립트 출력
+```
+
+`http://<로봇IP>:<포트>` 로 접속하면 처음 열 때 **같은 로봇의 rosbridge·영상으로 자동 연결**됩니다
+(이 저장소의 대시보드를 빌드해 쓴 경우). 휴대폰으로 바로 관제할 때 편합니다.
+`tb3ctl status` 의 대시보드 주소는 `DASHBOARD_PORT`(기본 3000) 기준이니, 스크립트가 다른 포트를 쓰면 이 값도 맞춰 주세요.
 
 ## 5. 동작 방식과 안전
 
@@ -138,6 +165,9 @@ sudo tb3ctl enable dashboard
 | 대시보드 영상 `WHEP 404 — no stream is available` | 카메라·video 서비스 상태, `ros2 topic hz /camera/image_raw` |
 | 대시보드 영상 `codecs not supported by client` | H.264 를 못 쓰는 브라우저. Chrome·Edge·Safari 로 열기 (일부 리눅스 Chromium 빌드는 H.264 없음) |
 | PC 에서 `ros2 topic list` 에 안 보임 | `ROS_DOMAIN_ID` 를 PC 와 같게 |
+| dashboard "스크립트가 바로 끝났고 실행 중인 서버가 없습니다" | start_dash.sh 의 마지막 명령이 서버를 계속 실행하는지, `tb3ctl logs dashboard` 에서 오류 확인 |
+| dashboard 재시작 반복 + "Address already in use" | 터미널에서 띄운 대시보드가 이미 포트를 쓰는 중 → 그 프로세스를 끄세요 (`sudo ss -ltnp \| grep :3000`) |
+| dashboard 에서 `npm: command not found` | node 경로 문제. 스크립트에서 절대 경로 사용 (`which npm` 결과) |
 | 수동으로 띄우던 노드와 충돌 | 자동 실행 중에는 같은 노드를 터미널에서 또 띄우지 마세요. 필요하면 `sudo tb3ctl stop <이름>` 후 실행 |
 
 ## 7. 제거
@@ -158,7 +188,7 @@ robot-side/autostart/
   tb3-run.sh            각 서비스가 실행하는 런처 (ROS 환경 → 프로그램 exec)
   tb3@.service.in       systemd 템플릿 유닛 (설치 시 사용자·경로 채움)
   tb3.target            묶음 타깃 (multi-user.target 에 연결)
-  robot.env.example     /etc/tb3/robot.env 원본
+  robot.env.example     /etc/tb3/robot.env 원본 (DASHBOARD_SCRIPT 등)
 ```
 
 ## 검증 상태
@@ -169,4 +199,5 @@ robot-side/autostart/
 | 설치 스크립트 (임시 경로에 파일 생성) · `systemd-analyze verify` | 통과 |
 | 구성요소별 실행 명령 (dry-run) | 확인 |
 | MediaMTX v1.21.2 + `mediamtx.yml` + IP 자동 등록 + image_to_rtsp.py(가짜 프레임) → 대시보드 WebRTC 재생 | 확인 (VP8 로 재생 확인, H.264 는 송출까지 확인) |
+| dashboard 스크립트: 포그라운드 / `&` 백그라운드 / 서버 종료 시 재시작 / 실패 / 정지 시 정리 | 새 세션·기본 시그널(systemd 와 같은 조건)로 확인 |
 | 실제 Pi 에서 부팅 자동 실행 · bringup · 카메라 | 실물 확인 필요 |

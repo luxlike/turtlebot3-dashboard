@@ -48,6 +48,45 @@ source_ros() {
   done
 }
 
+# 이 런처와 같은 프로세스 그룹에 다른 프로세스가 살아 있는지 (fork 없이 /proc 만 읽음)
+pgid_of() { local st; read -r st < "/proc/$1/stat" || return 1; st=${st##*) }; set -- $st; echo "$3"; }
+others_alive() {
+  local p st
+  for p in /proc/[0-9]*; do
+    [ "${p#/proc/}" = "$$" ] && continue
+    read -r st < "$p/stat" 2>/dev/null || continue
+    st=${st##*) }; set -- $st          # $1 상태  $2 ppid  $3 pgrp
+    [ "$1" != "Z" ] && [ "$3" = "$MY_PGID" ] && return 0
+  done
+  return 1
+}
+
+# 사용자 스크립트 실행: 스크립트 폴더에서, nvm·~/.local/bin 경로를 잡고 실행.
+# 스크립트가 서버를 '&' 로 띄우고 바로 끝나도, 그 서버가 살아 있는 동안 서비스를 유지합니다.
+run_user_script() {
+  local script="$1" rc
+  cd "$(dirname "$script")"
+  export PATH="$HOME/.local/bin:/usr/local/bin:$PATH"
+  # shellcheck disable=SC1091
+  [ -s "$HOME/.nvm/nvm.sh" ] && source "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 && nvm use --silent default >/dev/null 2>&1 || true
+  if [ -n "${TB3_DRY_RUN:-}" ]; then echo "(cd $(pwd)) $script"; exit 0; fi
+  MY_PGID="$(pgid_of $$)"
+  # 서비스 정지(SIGINT/SIGTERM) 때 스크립트가 백그라운드로 띄운 것까지 함께 정리
+  trap 'trap - INT TERM; log "정지 신호 — 대시보드 프로세스 정리"; kill -TERM 0 2>/dev/null; exit 0' INT TERM
+  log "실행: $script  (폴더 $(pwd))"
+  set +e
+  if [ -x "$script" ]; then "$script"; else bash "$script"; fi
+  rc=$?
+  set -e
+  if others_alive; then
+    log "스크립트는 끝났지만(종료코드 $rc) 띄운 프로세스가 실행 중 — 그동안 서비스 유지"
+    while others_alive; do sleep 5; done
+    die "대시보드 프로세스가 종료됨 — 5초 뒤 다시 시작"
+  fi
+  [ "$rc" -eq 0 ] && die "스크립트가 바로 끝났고 실행 중인 서버가 없습니다 (스크립트 마지막 명령이 서버를 계속 실행하는지 확인)"
+  die "스크립트 실패 (종료코드 $rc)"
+}
+
 # 공백이 든 *_CMD / *_ARGS 를 단어로 나눔 (따옴표 안 공백은 지원하지 않음)
 split() { read -r -a WORDS <<< "$1"; }
 
@@ -100,8 +139,17 @@ case "$COMP" in
     run python3 "$ROBOT_SIDE/ros2_mqtt_bridge.py" --ros-args -p "config:=${MQTT_CONFIG:-$ROBOT_SIDE/bridge.yaml}"
     ;;
   dashboard)
+    # 1순위: 사용자 시작 스크립트 (기본 ~/dashboard/start_dash.sh)
+    script="${DASHBOARD_SCRIPT:-}"
+    [ -z "$script" ] && [ -f "$HOME/dashboard/start_dash.sh" ] && script="$HOME/dashboard/start_dash.sh"
+    if [ -n "$script" ] && [ -f "$script" ]; then
+      run_user_script "$script"
+    elif [ -n "$script" ]; then
+      log "경고: $script 이 없어 정적 파일 서비스로 대신합니다"
+    fi
+    # 2순위: 빌드한 정적 파일(out/) 을 바로 서비스
     dir="${DASHBOARD_DIR:-$ROBOT_SIDE/../out}"
-    [ -f "$dir/index.html" ] || [ -n "${TB3_DRY_RUN:-}" ] || die "$dir/index.html 이 없습니다 (PC 에서 npm run build 후 out/ 복사)"
+    [ -f "$dir/index.html" ] || [ -n "${TB3_DRY_RUN:-}" ] || die "$dir/index.html 이 없습니다 (PC 에서 npm run build 후 out/ 복사, 또는 DASHBOARD_SCRIPT 지정)"
     run python3 -m http.server "${DASHBOARD_PORT:-3000}" --directory "$dir"
     ;;
   *)

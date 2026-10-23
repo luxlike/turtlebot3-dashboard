@@ -24,6 +24,7 @@ BIN_DIR="$DESTDIR/usr/local/bin"
 
 TARGET_USER="${SUDO_USER:-$(id -un)}"
 COMPONENTS="$DEFAULT_COMPONENTS"
+COMPONENTS_GIVEN=0
 DOWNLOAD_MTX=0
 START_NOW=0
 USE_SYSTEMCTL=1
@@ -31,7 +32,7 @@ USE_SYSTEMCTL=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --user) TARGET_USER="$2"; shift 2 ;;
-    --components) COMPONENTS="$2"; shift 2 ;;
+    --components) COMPONENTS="$2"; COMPONENTS_GIVEN=1; shift 2 ;;
     --download-mediamtx) DOWNLOAD_MTX=1; shift ;;
     --now) START_NOW=1; shift ;;
     --no-systemctl) USE_SYSTEMCTL=0; shift ;;
@@ -58,6 +59,12 @@ else
   USER_HOME="/home/$TARGET_USER"
 fi
 
+# ~/dashboard/start_dash.sh 가 있으면 관제 대시보드도 함께 자동 실행
+if [ "$COMPONENTS_GIVEN" = 0 ] && [ -f "$USER_HOME/dashboard/start_dash.sh" ]; then
+  COMPONENTS="$COMPONENTS dashboard"
+  DASH_FOUND=1
+fi
+
 echo "TurtleBot3 자동 실행 설치"
 echo "  사용자      : $TARGET_USER ($USER_HOME)"
 echo "  robot-side  : $ROBOT_SIDE"
@@ -81,6 +88,11 @@ if [ -z "$DESTDIR" ]; then
     id -nG "$TARGET_USER" | tr ' ' '\n' | grep -qx "$g" && ok "$TARGET_USER ∈ $g 그룹" \
       || warn "$TARGET_USER 가 $g 그룹이 아님 → sudo usermod -aG $g $TARGET_USER (서비스는 SupplementaryGroups 로 동작하지만 수동 실행용으로 권장)"
   done
+fi
+
+if [ "${DASH_FOUND:-0}" = 1 ]; then
+  ok "$USER_HOME/dashboard/start_dash.sh 발견 → 대시보드도 자동 실행"
+  [ -x "$USER_HOME/dashboard/start_dash.sh" ] || warn "start_dash.sh 에 실행 권한이 없어 bash 로 실행합니다 (chmod +x 권장)"
 fi
 
 # ---------------------------------------------------------------- MediaMTX
