@@ -84,12 +84,31 @@ export function loadSettings(): Settings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_SETTINGS;
+    if (!raw) return sameHostDefaults();
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return { ...DEFAULT_SETTINGS, ...parsed, topics: { ...DEFAULT_TOPICS, ...(parsed.topics ?? {}) } };
   } catch {
     return DEFAULT_SETTINGS;
   }
+}
+
+/**
+ * 저장된 설정이 없을 때의 기본값.
+ * 대시보드를 로봇이 직접 서비스하는 경우(tb3@dashboard, http://<로봇IP>:3000) 같은 호스트의
+ * rosbridge·MediaMTX 로 바로 연결합니다. localhost 에서 열면(개발 중) 시뮬레이터로 시작합니다.
+ */
+function sameHostDefaults(): Settings {
+  const host = window.location.hostname;
+  const local = host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "";
+  if (local || process.env.NEXT_PUBLIC_DEFAULT_TRANSPORT) return DEFAULT_SETTINGS;
+  return {
+    ...DEFAULT_SETTINGS,
+    transport: "rosbridge",
+    rosbridgeUrl: `ws://${host}:9090`,
+    mqttUrl: `ws://${host}:9001`,
+    videoMode: "whep",
+    videoUrl: `http://${host}:8889/cam/whep`,
+  };
 }
 
 export function saveSettings(s: Settings) {

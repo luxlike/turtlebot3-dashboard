@@ -1,0 +1,26 @@
+# install.sh 가 @USER@ / @ROBOT_SIDE@ 를 채워 /etc/systemd/system/tb3@.service 로 설치합니다.
+# 인스턴스: tb3@bringup, tb3@camera, tb3@rosbridge, tb3@mediamtx, tb3@video, tb3@vision, tb3@arm, tb3@mqtt, tb3@dashboard
+[Unit]
+Description=TurtleBot3 %i
+Documentation=https://github.com/luxlike/turtlebot3-dashboard/blob/main/docs/AUTOSTART.md
+After=network-online.target time-sync.target
+Wants=network-online.target
+PartOf=tb3.target
+# 하드웨어가 늦게 잡혀도 계속 재시도
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=@USER@
+SupplementaryGroups=dialout video
+Environment=PYTHONUNBUFFERED=1 RCUTILS_LOGGING_BUFFERED_STREAM=0 RCUTILS_COLORIZED_OUTPUT=0
+ExecStart=@ROBOT_SIDE@/autostart/tb3-run.sh %i
+Restart=always
+RestartSec=5
+# ros2 launch 는 SIGINT 를 받아야 자식 노드까지 깔끔하게 정리합니다 (정지 명령 발행 포함)
+KillSignal=SIGINT
+TimeoutStopSec=20
+SyslogIdentifier=tb3-%i
+
+[Install]
+WantedBy=tb3.target

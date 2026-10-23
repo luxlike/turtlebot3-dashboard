@@ -13,6 +13,8 @@ ROS 2 Jazzy · Ubuntu 24.04 on Pi 기준입니다.
 
 순서: **1. PC에서 시뮬레이터로 확인 → 2. 전원 준비 → 3. 로봇 bringup + rosbridge → 4. 영상 → 5. 확인**
 
+> 3·4장의 터미널 작업을 매번 하기 싫으면 **[AUTOSTART.md](AUTOSTART.md)** 로 부팅 시 자동 실행되게 하세요.
+
 ---
 
 ## 1. PC — 대시보드 실행 (로봇 없이)
@@ -217,6 +219,7 @@ python3 image_to_rtsp.py --ros-args -p image_topic:=/camera/image_raw -p fps:=15
 | `Failed to fetch` | MediaMTX 꺼짐·IP 오타·방화벽 |
 | "연결 끊김 — 재시도" 반복 | `webrtcAdditionalHosts` 에 SBC Wi-Fi IP |
 | "지원하지 않는 encoding" | 카메라에 `-p format:=RGB888` |
+| `codecs not supported by client` | H.264 를 못 쓰는 브라우저 → Chrome·Edge·Safari 로 열기 |
 | 영상 끊김 | `fps:=10`, 또는 카메라 `width:=480 height:=360` |
 | 실내 맵이 비어 있음 | SLAM/Nav2를 켜야 `/map` 이 나옴 |
 | 대시보드를 https로 열었더니 연결 안 됨 | 브라우저가 ws:// · http:// 영상을 막음(mixed content). LAN에서는 http로 |
@@ -255,5 +258,5 @@ cd ~/dashboard && python3 -m http.server 3000
 | 시뮬레이터 모드 전체 UI | 헤드리스 브라우저로 확인 |
 | MQTT 송수신 (odom·scan·battery 수신, cmd_vel·제스처 발신) | 로컬 브로커로 확인 |
 | rosbridge 실물 연결 | 실물 확인 필요 |
-| WebRTC 영상 (MediaMTX + image_to_rtsp.py) | 실물 확인 필요 |
+| WebRTC 영상 (MediaMTX + image_to_rtsp.py) | 가짜 카메라 프레임으로 대시보드 재생까지 확인, 실제 Pi 카메라는 확인 필요 |
 | ros2_mqtt_bridge.py | 문법·설정 파일만 확인 |

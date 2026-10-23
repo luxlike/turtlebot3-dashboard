@@ -1,0 +1,8 @@
+[Unit]
+Description=TurtleBot3 자동 실행 묶음 (bringup · 카메라 · rosbridge · 영상 …)
+Documentation=https://github.com/luxlike/turtlebot3-dashboard/blob/main/docs/AUTOSTART.md
+After=network-online.target
+Wants=network-online.target
+
+[Install]
+WantedBy=multi-user.target

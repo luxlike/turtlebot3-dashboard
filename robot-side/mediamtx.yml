@@ -12,6 +12,8 @@ rtspTransports: [tcp]
 rtmp: false
 hls: false
 srt: false
+# v1.21 부터 기본으로 켜지는 MoQ 서버 — 작업 폴더에 인증서를 만들려다 서비스(cwd=/)에서 실패하므로 끔
+moq: false
 
 webrtc: true
 webrtcAddress: :8889

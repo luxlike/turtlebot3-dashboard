@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# tb3ctl — 자동 실행 서비스 관리
+#
+#   tb3ctl status                    구성요소별 상태 + 포트 + 토픽 요약
+#   tb3ctl logs [이름]               로그 따라가기 (이름 없으면 전체)
+#   sudo tb3ctl start|stop|restart [이름]   (이름 없으면 전체)
+#   sudo tb3ctl enable <이름>        부팅 시 자동 실행에 추가하고 바로 시작
+#   sudo tb3ctl disable <이름>       자동 실행에서 빼고 정지
+#   tb3ctl run <이름>                서비스 대신 터미널에서 직접 실행 (디버깅용, 먼저 sudo tb3ctl stop <이름>)
+#
+# 이름: bringup camera rosbridge mediamtx video vision arm mqtt dashboard
+set -eo pipefail
+
+ALL="bringup camera rosbridge mediamtx video vision arm mqtt dashboard"
+HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+
+need_root() { [ "$(id -u)" -eq 0 ] || { echo "sudo 가 필요합니다:  sudo tb3ctl $*"; exit 1; }; }
+check_name() { [[ " $ALL " == *" $1 "* ]] || { echo "알 수 없는 이름: $1  (가능: $ALL)"; exit 1; }; }
+enabled_list() {
+  for c in $ALL; do systemctl is-enabled --quiet "tb3@$c" 2>/dev/null && echo "$c"; done
+}
+units() {   # units [name] → 대상 유닛 목록
+  if [ -n "${1:-}" ]; then check_name "$1"; echo "tb3@$1"
+  else for c in $(enabled_list); do echo "tb3@$c"; done; fi
+}
+port_state() { (echo > "/dev/tcp/127.0.0.1/$1") 2>/dev/null && echo "열림" || echo "닫힘"; }
+
+cmd="${1:-status}"; shift || true
+
+case "$cmd" in
+  status)
+    printf "%-10s %-8s %-10s %s\n" "구성요소" "자동실행" "상태" "비고"
+    for c in $ALL; do
+      en=$(systemctl is-enabled "tb3@$c" 2>/dev/null || true)
+      [ "$en" = "enabled" ] || { [ "$(systemctl is-active "tb3@$c" 2>/dev/null)" = "active" ] || continue; }
+      st=$(systemctl is-active "tb3@$c" 2>/dev/null || true)
+      restarts=$(systemctl show "tb3@$c" -p NRestarts --value 2>/dev/null || echo 0)
+      note=""; [ "${restarts:-0}" -gt 0 ] && note="재시작 ${restarts}회"
+      color="\e[32m"; [ "$st" != "active" ] && color="\e[31m"
+      printf "%-10s %-8s ${color}%-10s\e[0m %s\n" "$c" "${en:-no}" "$st" "$note"
+    done
+    set +e; source /etc/tb3/robot.env 2>/dev/null; set -e
+    echo
+    echo "포트: rosbridge ${ROSBRIDGE_PORT:-9090} $(port_state "${ROSBRIDGE_PORT:-9090}") · WebRTC 8889 $(port_state 8889) · RTSP 8554 $(port_state 8554)"
+    ips="$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+\.' | head -1)"
+    if [ -n "$ips" ]; then
+      echo "대시보드 설정: rosbridge ws://$ips:${ROSBRIDGE_PORT:-9090} · 영상 http://$ips:8889/cam/whep"
+      systemctl is-enabled --quiet tb3@dashboard 2>/dev/null && echo "대시보드 주소: http://$ips:${DASHBOARD_PORT:-3000}"
+    fi
+    echo "문제가 있으면: tb3ctl logs <이름>"
+    ;;
+  logs)
+    if [ -n "${1:-}" ]; then check_name "$1"; exec journalctl -u "tb3@$1" -f -n 80 --no-hostname -o short
+    else exec journalctl -u 'tb3@*' -f -n 80 --no-hostname -o short; fi
+    ;;
+  start|stop|restart)
+    need_root "$cmd" "$@"
+    mapfile -t U < <(units "${1:-}")
+    [ ${#U[@]} -gt 0 ] || { echo "자동 실행에 등록된 구성요소가 없습니다"; exit 1; }
+    systemctl "$cmd" "${U[@]}"
+    echo "$cmd: ${U[*]}"
+    ;;
+  enable|disable)
+    need_root "$cmd" "$@"
+    [ -n "${1:-}" ] || { echo "이름을 지정하세요: sudo tb3ctl $cmd vision"; exit 1; }
+    check_name "$1"
+    systemctl "$cmd" --now "tb3@$1"
+    echo "$cmd: tb3@$1"
+    ;;
+  run)
+    [ -n "${1:-}" ] || { echo "이름을 지정하세요: tb3ctl run camera"; exit 1; }
+    check_name "$1"
+    systemctl is-active --quiet "tb3@$1" && echo "주의: tb3@$1 서비스가 이미 실행 중입니다 (sudo tb3ctl stop $1)"
+    exec "$HERE/tb3-run.sh" "$1"
+    ;;
+  -h|--help|help)
+    sed -n '2,12p' "$0"
+    ;;
+  *)
+    echo "알 수 없는 명령: $cmd"; sed -n '2,12p' "$0"; exit 1
+    ;;
+esac

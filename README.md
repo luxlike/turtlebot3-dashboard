@@ -4,6 +4,7 @@ TurtleBot3(Waffle Pi / Burger) + OpenMANIPULATOR-X + `walle_arm` · `walle_visio
 브라우저 하나로 보고 조종하는 Next.js 대시보드입니다.
 
 > **실물 로봇 연결 순서(전원 · bringup · 영상 · 문제 해결)는 [docs/MONITORING.md](docs/MONITORING.md) 를 보세요.**
+> **터틀봇 부팅 시 자동 실행은 [docs/AUTOSTART.md](docs/AUTOSTART.md)** — `sudo ./install.sh --download-mediamtx --now` 한 줄로 설치합니다.
 
 ![대시보드 (시뮬레이터 모드)](docs/images/dashboard-sim.png)
 
@@ -124,7 +125,7 @@ python3 image_to_rtsp.py --ros-args -p image_topic:=/camera/image_raw -p fps:=15
 
 ## 7. 구조
 ```
-docs/                MONITORING.md (실물 연결 가이드), images/
+docs/                MONITORING.md (실물 연결 가이드), AUTOSTART.md (부팅 자동 실행), images/
 app/                 layout, page, globals.css (테마 토큰)
 components/          Dashboard, Header, SettingsDrawer, VideoPanel, Scene3D, MapPanel,
                      TeleopPanel, CommandPanel, TelemetryPanel, LogPanel, Panel
@@ -134,6 +135,7 @@ lib/ros.ts           메시지 변환(LaserScan, PointCloud2, 쿼터니언), 명
 lib/gestures.ts      walle_arm 명령·walle_vision 모드 목록, 시뮬레이터 키프레임
 robot-side/          ros2_mqtt_bridge.py + bridge.yaml, image_to_rtsp.py, mediamtx.yml, go2rtc.yaml,
                      mosquitto.conf, start_robot_side.sh
+                     autostart/ — systemd 자동 실행 (install.sh, tb3ctl, tb3-run.sh, tb3@.service.in)
 ```
 새 통신 방식을 붙이려면 `Transport` 인터페이스(connect / subscribe / publish / onState)만 구현하면 됩니다.
 

@@ -31,7 +31,16 @@ async function whepConnect(url: string, video: HTMLVideoElement, signal: AbortSi
   const resp = await fetch(url, {
     method: "POST", headers: { "Content-Type": "application/sdp" }, body: pc.localDescription!.sdp, signal,
   });
-  if (!resp.ok) throw new Error(`WHEP ${resp.status} ${resp.statusText}`);
+  if (!resp.ok) {
+    // MediaMTX 는 {"error": "..."} 로 이유를 알려 줌 (예: 아직 영상 없음, 코덱 미지원)
+    let reason = "";
+    try {
+      const t = await resp.text();
+      reason = (JSON.parse(t) as { error?: string }).error ?? t;
+    } catch { /* noop */ }
+    pc.close();
+    throw new Error(`WHEP ${resp.status}${reason ? ` — ${reason}` : ""}`);
+  }
   await pc.setRemoteDescription({ type: "answer", sdp: await resp.text() });
   return { pc, resource: resp.headers.get("Location") };
 }
@@ -78,6 +87,8 @@ function mockStream(): MediaStream {
 export default function VideoPanel() {
   const settings = useRobot((s) => s.settings);
   const conn = useRobot((s) => s.conn);
+  // 시뮬레이터 영상만 연결 상태를 따름. 실제 영상(WHEP·MJPEG)은 rosbridge 재접속과 무관하게 유지
+  const mockLive = settings.transport === "mock" && conn === "connected";
   const videoRef = useRef<HTMLVideoElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"idle" | "connecting" | "live" | "error">("idle");
@@ -99,7 +110,7 @@ export default function VideoPanel() {
     setStatus("connecting"); setErr(""); setStats(null);
 
     if (mode === "mock") {
-      if (conn !== "connected") { setStatus("idle"); return; }
+      if (!mockLive) { setStatus("idle"); return; }
       mock = mockStream();
       video.srcObject = mock;
       setStatus("live");
@@ -117,6 +128,8 @@ export default function VideoPanel() {
               retry = setTimeout(() => setNonce((n) => n + 1), 3000);
             }
           };
+          // 핸들러를 달기 전에 이미 연결됐을 수도 있음
+          if (pc.connectionState === "connected") setStatus("live");
           statTimer = setInterval(async () => {
             if (!pc) return;
             const rep = await pc.getStats();
@@ -153,7 +166,7 @@ export default function VideoPanel() {
       mock?.getTracks().forEach((t) => t.stop());
       video.srcObject = null;
     };
-  }, [mode, settings.videoUrl, nonce, conn]);
+  }, [mode, settings.videoUrl, nonce, mockLive]);
 
   const snapshot = useCallback(() => {
     const v = videoRef.current;
