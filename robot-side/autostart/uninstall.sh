@@ -4,7 +4,7 @@
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "sudo 로 실행하세요"; exit 1; }
 
-for c in bringup camera rosbridge mediamtx video vision arm mqtt dashboard; do
+for c in bringup camera rosbridge mediamtx video vision arm mqtt sound dashboard; do
   systemctl disable --now --quiet "tb3@$c" 2>/dev/null || true
 done
 systemctl disable --now --quiet tb3.target 2>/dev/null || true

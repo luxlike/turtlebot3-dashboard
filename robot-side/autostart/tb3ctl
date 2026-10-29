@@ -8,10 +8,10 @@
 #   sudo tb3ctl disable <이름>       자동 실행에서 빼고 정지
 #   tb3ctl run <이름>                서비스 대신 터미널에서 직접 실행 (디버깅용, 먼저 sudo tb3ctl stop <이름>)
 #
-# 이름: bringup camera rosbridge mediamtx video vision arm mqtt dashboard
+# 이름: bringup camera rosbridge mediamtx video vision arm mqtt sound dashboard
 set -eo pipefail
 
-ALL="bringup camera rosbridge mediamtx video vision arm mqtt dashboard"
+ALL="bringup camera rosbridge mediamtx video vision arm mqtt sound dashboard"
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "sudo 가 필요합니다:  sudo tb3ctl $*"; exit 1; }; }

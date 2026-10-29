@@ -4,7 +4,7 @@
 #   명령만 보기: TB3_DRY_RUN=1 ./tb3-run.sh video
 set -eo pipefail     # -u 는 쓰지 않음 (ROS setup.bash 가 미정의 변수를 참조)
 
-COMP="${1:?사용법: tb3-run.sh <bringup|camera|rosbridge|mediamtx|video|vision|arm|mqtt|dashboard>}"
+COMP="${1:?사용법: tb3-run.sh <bringup|camera|rosbridge|mediamtx|video|vision|arm|mqtt|sound|dashboard>}"
 ENV_FILE="${TB3_ENV_FILE:-/etc/tb3/robot.env}"
 ROBOT_SIDE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 
@@ -132,6 +132,23 @@ case "$COMP" in
   arm)
     source_ros
     split "${ARM_CMD:?ARM_CMD 를 robot.env 에 설정하세요}"
+    run "${WORDS[@]}"
+    ;;
+  sound)
+    source_ros
+    # 사운드 카드(재생 장치)가 잡힐 때까지 최대 30초 — 없으면 5초 뒤 재시도 (tb3ctl status 에 재시작 횟수로 보임)
+    if [ -z "${TB3_DRY_RUN:-}" ]; then
+      i=0
+      until compgen -G '/dev/snd/pcmC*D*p' >/dev/null; do
+        i=$((i + 1))
+        [ "$i" -ge 30 ] && die "재생 장치가 없습니다 — aplay -l 확인 (3.5mm 잭: config.txt 의 dtparam=audio=on, sudo modprobe snd_bcm2835 / 또는 USB 사운드카드)"
+        sleep 1
+      done
+      [ -w "$(compgen -G '/dev/snd/controlC*' | head -1)" ] \
+        || log "경고: /dev/snd 쓰기 권한 없음 → sudo usermod -aG audio $(id -un) 후 sudo tb3ctl restart sound"
+    fi
+    # 예전에 만든 robot.env 에 SOUND_CMD 가 없어도 동작하도록 기본값
+    split "${SOUND_CMD:-ros2 launch walle_sound sound.launch.py}"
     run "${WORDS[@]}"
     ;;
   mqtt)
