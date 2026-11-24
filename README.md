@@ -10,7 +10,7 @@ TurtleBot3(Waffle Pi / Burger) + OpenMANIPULATOR-X + `walle_arm` · `walle_visio
 
 ### 사용 안내 영상
 
-<video src="https://github.com/user-attachments/assets/c35a883e-1eca-4609-9a2a-d5227911d560" controls width="100%"></video>
+https://github.com/user-attachments/assets/c35a883e-1eca-4609-9a2a-d5227911d560
 
 기능과 장점(1부), 화면 영역별 사용법(2부)을 나레이션과 함께 설명합니다(5분 6초) — 상단 바 · 카메라 · 3D 뷰 · 실내 맵과 Nav2 자율 이동 · 원격 조종 · 텔레메트리 · 자율 주행·팔 · 이벤트 로그, 움직이기 전 점검. 나레이션: Typecast AI 음성.
 
