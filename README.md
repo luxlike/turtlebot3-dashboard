@@ -13,7 +13,7 @@ TurtleBot3(Waffle Pi / Burger) + OpenMANIPULATOR-X + `walle_arm` · `walle_visio
 [![TB3 관제 사용 안내 영상 (5분 6초)](docs/images/video-thumbnail.jpg)](docs/video/tb3-dashboard-guide.mp4)
 
 기능과 장점(1부), 화면 영역별 사용법(2부)을 나레이션과 함께 설명합니다 — 상단 바 · 카메라 · 3D 뷰 · 실내 맵과 Nav2 자율 이동 · 원격 조종 · 텔레메트리 · 자율 주행·팔 · 이벤트 로그, 움직이기 전 점검.
-이미지를 누르면 영상 파일([docs/video/tb3-dashboard-guide.mp4](docs/video/tb3-dashboard-guide.mp4), 1080p, 약 20 MB)이 열립니다. 나레이션: Typecast AI 음성.
+이미지를 누르면 영상 파일([docs/video/tb3-dashboard-guide.mp4](docs/video/tb3-dashboard-guide.mp4), 1080p, 약 9.6 MB)이 열립니다. 나레이션: Typecast AI 음성.
 
 | 영역 | 구현 |
 |---|---|
