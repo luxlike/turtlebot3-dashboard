@@ -8,6 +8,13 @@ export interface GridMap {
   originX: number; originY: number; originYaw: number;
   data: Int8Array; version: number;
 }
+export interface MapEntry { name: string; yaw: number; res: number; width_m: number | null; height_m: number | null; mtime: number; error?: string | null }
+/** robot-side/map_manager.py 가 보내는 상태 */
+export interface MapManagerState {
+  dir: string; maps: MapEntry[]; loaded: string | null;
+  nav2: "off" | "starting" | "active"; managed: boolean; busy: boolean;
+  nav: "idle" | "active" | "succeeded" | "canceled" | "aborted"; msg: string;
+}
 export interface LogEntry { t: number; level: "info" | "warn" | "error" | "cmd"; text: string }
 
 interface RobotState {
@@ -23,6 +30,7 @@ interface RobotState {
   odomTrailLen: number;
   mapPose: Pose2D | null;
   map: GridMap | null;
+  mapManager: MapManagerState | null;
 
   /** base_scan 프레임 xyz 반복 */
   scan: Float32Array;
@@ -49,7 +57,7 @@ interface RobotState {
 
 const empty = () => ({
   odom: null, vel: { v: 0, w: 0 }, odomTrail: new Float32Array(4000), odomTrailLen: 0,
-  mapPose: null, map: null, scan: new Float32Array(0), scanVersion: 0, cloud: new Float32Array(0), cloudVersion: 0,
+  mapPose: null, map: null, mapManager: null, scan: new Float32Array(0), scanVersion: 0, cloud: new Float32Array(0), cloudVersion: 0,
   joints: {}, battery: null, gps: null, gpsTrail: [], walleStatus: null, visionStatus: null,
   rates: {}, lastSeen: {},
 });

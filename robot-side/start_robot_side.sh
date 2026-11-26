@@ -20,6 +20,11 @@ else
   pids+=($!)
 fi
 
+# 지도 관리: tb3_lidar_mapper 지도(~/maps) 목록 → 대시보드에서 골라 Nav2 실행
+#   MAPS_DIR=~/maps  NAV2_PARAMS=~/walle_nav/burger_home.yaml  NAV_MAP=home (켜자마자 Nav2)
+python3 map_manager.py &   # MAPS_DIR · NAV2_PARAMS · NAV_MAP 환경변수를 읽음
+pids+=($!)
+
 # 영상: MediaMTX 가 같은 폴더에 있다고 가정
 if [ -x ./mediamtx ]; then
   ./mediamtx mediamtx.yml &

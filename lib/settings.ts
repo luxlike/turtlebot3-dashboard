@@ -20,6 +20,10 @@ export interface TopicNames {
   driveMode: string;
   goalPose: string;
   pickPoint: string;
+  initialPose: string;
+  /** robot-side/map_manager.py — 지도 목록·Nav2 상태(JSON) / 지도 불러오기 명령 */
+  mapList: string;
+  mapCmd: string;
 }
 
 export interface Settings {
@@ -58,6 +62,9 @@ export const DEFAULT_TOPICS: TopicNames = {
   driveMode: "/walle/drive_mode",
   goalPose: "/goal_pose",
   pickPoint: "/walle/pick_point",
+  initialPose: "/initialpose",
+  mapList: "/dashboard/maps",
+  mapCmd: "/dashboard/map_cmd",
 };
 
 export const DEFAULT_SETTINGS: Settings = {

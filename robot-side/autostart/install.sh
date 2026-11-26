@@ -3,7 +3,7 @@
 #
 #   sudo ./install.sh                         # 기본: bringup camera rosbridge mediamtx video
 #   sudo ./install.sh --download-mediamtx     # MediaMTX 실행 파일도 받기
-#   sudo ./install.sh --components "bringup camera rosbridge mediamtx video vision"
+#   sudo ./install.sh --components "bringup camera rosbridge mediamtx video vision sound"
 #   sudo ./install.sh --now                   # 설치 후 바로 시작
 #   sudo ./install.sh --user luxlike          # 서비스를 실행할 사용자 (기본: sudo 를 실행한 사용자)
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 
 MEDIAMTX_VERSION="v1.21.2"
 DEFAULT_COMPONENTS="bringup camera rosbridge mediamtx video"
-ALL_COMPONENTS="bringup camera rosbridge mediamtx video vision arm mqtt dashboard"
+ALL_COMPONENTS="bringup camera rosbridge mediamtx video vision arm mqtt sound dashboard"
 
 HERE="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 ROBOT_SIDE="$(cd "$HERE/.." && pwd)"
@@ -83,8 +83,16 @@ fi
 if [[ " $COMPONENTS " == *" mqtt "* ]]; then
   python3 -c "import paho.mqtt" 2>/dev/null && ok "paho-mqtt" || warn "paho-mqtt 미설치 → sudo apt install python3-paho-mqtt"
 fi
+if [[ " $COMPONENTS " == *" sound "* ]]; then
+  command -v aplay >/dev/null && ok "alsa-utils (aplay)" || warn "alsa-utils 미설치 → sudo apt install alsa-utils"
+  command -v espeak-ng >/dev/null && ok "espeak-ng" || warn "espeak-ng 미설치 → sudo apt install espeak-ng (효과음만 쓰면 없어도 됨)"
+  if command -v aplay >/dev/null && [ -z "$DESTDIR" ]; then
+    aplay -l 2>/dev/null | grep -q '^card ' && ok "재생 장치: $(aplay -l | sed -n 's/^card [0-9]*: \([^ ]*\).*/\1/p' | sort -u | paste -sd, -)" \
+      || warn "재생 장치가 없음 (aplay -l) → 3.5mm 잭: config.txt 의 dtparam=audio=on + sudo modprobe snd_bcm2835, 또는 USB 사운드카드"
+  fi
+fi
 if [ -z "$DESTDIR" ]; then
-  for g in dialout video; do
+  for g in dialout video audio; do
     id -nG "$TARGET_USER" | tr ' ' '\n' | grep -qx "$g" && ok "$TARGET_USER ∈ $g 그룹" \
       || warn "$TARGET_USER 가 $g 그룹이 아님 → sudo usermod -aG $g $TARGET_USER (서비스는 SupplementaryGroups 로 동작하지만 수동 실행용으로 권장)"
   done

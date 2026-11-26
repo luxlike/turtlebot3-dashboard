@@ -106,6 +106,28 @@ export function sendGoal(x: number, y: number, yaw: number) {
   log("cmd", `목표 지점 (${x.toFixed(2)}, ${y.toFixed(2)}, ${((yaw * 180) / Math.PI).toFixed(0)}°)`);
 }
 
+/** AMCL 초기 위치 (RViz 2D Pose Estimate 와 같은 공분산) */
+export function sendInitialPose(x: number, y: number, yaw: number) {
+  const { transport, settings, log } = useRobot.getState();
+  if (!transport) return;
+  const covariance = new Array(36).fill(0);
+  covariance[0] = covariance[7] = 0.25;
+  covariance[35] = 0.0685;
+  transport.publish(settings.topics.initialPose, "geometry_msgs/msg/PoseWithCovarianceStamped", {
+    header: { stamp: rosStamp(), frame_id: "map" },
+    pose: { pose: { position: { x, y, z: 0 }, orientation: quatOf(yaw) }, covariance },
+  });
+  log("cmd", `초기 위치 (${x.toFixed(2)}, ${y.toFixed(2)}, ${((yaw * 180) / Math.PI).toFixed(0)}°)`);
+}
+
+/** robot-side/map_manager.py 명령: load / cancel / stop_nav2 / refresh */
+export function sendMapCmd(cmd: { action: "load"; name: string; initial_pose?: boolean } | { action: "cancel" | "stop_nav2" | "refresh" }) {
+  const { transport, settings, log } = useRobot.getState();
+  if (!transport) return;
+  transport.publish(settings.topics.mapCmd, "std_msgs/msg/String", { data: JSON.stringify(cmd) });
+  log("cmd", cmd.action === "load" ? `지도 불러오기 '${cmd.name}'` : `지도 관리 ← ${cmd.action}`);
+}
+
 export function sendPickPoint(kind: "pickPoint", x: number, y: number, z: number) {
   const { transport, settings, log } = useRobot.getState();
   if (!transport) return;
@@ -124,12 +146,13 @@ export function placePoint(x: number, y: number, z: number) {
   log("cmd", `내려놓기 좌표 base_link (${x}, ${y}, ${z})`);
 }
 
-/** 비상정지: 정지 명령 여러 번 + 팔 stop + 주행 모드 idle, 그리고 조종 잠금 */
+/** 비상정지: 정지 명령 여러 번 + 팔 stop + 주행 모드 idle + Nav2 목표 취소, 그리고 조종 잠금 */
 export function emergencyStop() {
   const { set, log } = useRobot.getState();
   set({ estop: true });
   for (let i = 0; i < 5; i++) setTimeout(() => publishTwist(0, 0), i * 60);
   sendString("walleCommand", "stop");
   sendString("driveMode", "idle");
+  sendMapCmd({ action: "cancel" }); // Nav2 가 계속 cmd_vel 을 내지 않도록
   log("error", "비상정지 — 조종 잠금. 해제하려면 E-STOP 을 다시 누르세요");
 }

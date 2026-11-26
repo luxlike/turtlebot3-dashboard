@@ -19,6 +19,7 @@ outbound:
   - { topic: /fix,                  type: sensor_msgs/msg/NavSatFix,                     rate_hz: 2,  sensor: true }
   - { topic: /walle/status,         type: std_msgs/msg/String,                           rate_hz: 5 }
   - { topic: /walle/vision/status,  type: std_msgs/msg/String,                           rate_hz: 4 }
+  - { topic: /dashboard/maps,       type: std_msgs/msg/String,                           rate_hz: 1, latched: true }   # map_manager.py
 
 # 웹 → 로봇 — 여기 적힌 토픽만 통과합니다
 inbound:
@@ -28,3 +29,5 @@ inbound:
   - { topic: /goal_pose,        type: geometry_msgs/msg/PoseStamped }
   - { topic: /walle/pick_point, type: geometry_msgs/msg/PointStamped }
   - { topic: /walle/place_point, type: geometry_msgs/msg/PointStamped }
+  - { topic: /initialpose,      type: geometry_msgs/msg/PoseWithCovarianceStamped }
+  - { topic: /dashboard/map_cmd, type: std_msgs/msg/String }               # map_manager.py (load/cancel/stop_nav2)

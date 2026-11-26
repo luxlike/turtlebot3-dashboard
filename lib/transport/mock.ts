@@ -65,6 +65,14 @@ export class MockTransport implements Transport {
   private gestureT = 0;
   private gestureFrom: number[] | null = null;
   private armState = "idle";
+  private mapMgr = {
+    dir: "~/maps (시뮬레이터)", loaded: "sim_room" as string | null, nav2: "active", managed: true, busy: false,
+    nav: "idle", msg: "",
+    maps: [
+      { name: "sim_room", yaw: 0, res: 0.05, width_m: 6.4, height_m: 5.4, mtime: 1767225600 },
+      { name: "home", yaw: 0.2094, res: 0.05, width_m: 8.4, height_m: 7.1, mtime: 1767312000 },
+    ],
+  };
 
   constructor(private topicNames: Record<string, string>) {}
 
@@ -90,6 +98,7 @@ export class MockTransport implements Transport {
     if (!hs) this.handlers.set(spec.topic, (hs = new Set()));
     hs.add(cb);
     if (spec.topic === this.topicNames.map) setTimeout(() => cb(this.mapMsg()), 100);
+    if (spec.topic === this.topicNames.mapList) setTimeout(() => this.emitMapMgr(), 100);
     return () => hs!.delete(cb);
   }
 
@@ -106,6 +115,12 @@ export class MockTransport implements Transport {
     } else if (topic === T.goalPose) {
       this.goal = { x: msg.pose.position.x, y: msg.pose.position.y };
       this.mode = "idle";
+    } else if (topic === T.initialPose) {
+      const p = msg.pose.pose;
+      this.x = p.position.x; this.y = p.position.y;
+      this.yaw = Math.atan2(2 * p.orientation.w * p.orientation.z, 1 - 2 * p.orientation.z * p.orientation.z);
+    } else if (topic === T.mapCmd) {
+      this.onMapCmd(JSON.parse(String(msg.data)));
     } else if (topic === T.driveMode) {
       const m = String(msg.data);
       if (["ball", "line", "lane", "avoid", "idle", "stop"].includes(m)) this.mode = m === "stop" ? "idle" : m;
@@ -252,8 +267,41 @@ export class MockTransport implements Transport {
         data: JSON.stringify({ state: this.armState, queue: this.gestureQueue.map((g) => g.name), motion_lock: Math.abs(this.v) > 0.02 || Math.abs(this.w) > 0.08 }),
       });
       this.emitVision();
+      this.emitMapMgr();
     }
     if (this.tick % 100 === 0) this.emit(T.map, this.mapMsg());
+  }
+
+  // robot-side/map_manager.py 흉내 — 시뮬레이터는 방이 하나라 지도 이름만 바꿈
+  private onMapCmd(c: { action: string; name?: string; initial_pose?: boolean }) {
+    const M = this.mapMgr;
+    if (c.action === "load" && c.name) {
+      const m = M.maps.find((e) => e.name === c.name);
+      if (!m) { M.msg = `지도 '${c.name}' 이(가) 없습니다`; return this.emitMapMgr(); }
+      Object.assign(M, { busy: true, nav2: "starting", msg: `Nav2 에 지도 '${c.name}' 불러오는 중…` });
+      this.emitMapMgr();
+      setTimeout(() => {
+        if (c.initial_pose !== false) { this.x = 0; this.y = 0; this.yaw = m.yaw; }
+        Object.assign(M, {
+          busy: false, nav2: "active", loaded: c.name,
+          msg: c.initial_pose !== false ? `지도 '${c.name}' 준비 완료 · 초기 위치 (0, 0, ${((m.yaw * 180) / Math.PI).toFixed(1)}°)` : `지도 '${c.name}' 준비 완료 — 초기 위치를 지정하세요`,
+        });
+        this.emit(this.topicNames.map, this.mapMsg());
+        this.emitMapMgr();
+      }, 1200);
+    } else if (c.action === "cancel") {
+      this.goal = null;
+      Object.assign(M, { nav: "canceled", msg: "Nav2 목표 취소" });
+      this.emitMapMgr();
+    } else if (c.action === "stop_nav2") {
+      Object.assign(M, { nav2: "off", loaded: null, msg: "Nav2 를 껐습니다" });
+      this.emitMapMgr();
+    } else this.emitMapMgr();
+  }
+
+  private emitMapMgr() {
+    this.mapMgr.nav = this.goal ? "active" : this.mapMgr.nav === "active" ? "succeeded" : this.mapMgr.nav;
+    this.emit(this.topicNames.mapList, { data: JSON.stringify(this.mapMgr) });
   }
 
   private emitVision() {

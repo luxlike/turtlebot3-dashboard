@@ -1,5 +1,5 @@
 # install.sh 가 @USER@ / @ROBOT_SIDE@ 를 채워 /etc/systemd/system/tb3@.service 로 설치합니다.
-# 인스턴스: tb3@bringup, tb3@camera, tb3@rosbridge, tb3@mediamtx, tb3@video, tb3@vision, tb3@arm, tb3@mqtt, tb3@dashboard
+# 인스턴스: tb3@bringup, tb3@camera, tb3@rosbridge, tb3@mediamtx, tb3@video, tb3@vision, tb3@arm, tb3@mqtt, tb3@sound, tb3@dashboard
 [Unit]
 Description=TurtleBot3 %i
 Documentation=https://github.com/luxlike/turtlebot3-dashboard/blob/main/docs/AUTOSTART.md
@@ -12,7 +12,7 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=@USER@
-SupplementaryGroups=dialout video
+SupplementaryGroups=dialout video audio
 Environment=PYTHONUNBUFFERED=1 RCUTILS_LOGGING_BUFFERED_STREAM=0 RCUTILS_COLORIZED_OUTPUT=0
 ExecStart=@ROBOT_SIDE@/autostart/tb3-run.sh %i
 Restart=always

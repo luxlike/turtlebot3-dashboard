@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { useRobot } from "./store";
+import { useRobot, type MapManagerState } from "./store";
 import { MockTransport } from "./transport/mock";
 import { MqttTransport } from "./transport/mqtt";
 import { RosbridgeTransport } from "./transport/rosbridge";
@@ -100,6 +100,16 @@ export function useConnection(enabled: boolean, nonce: number) {
       sub({ topic: T.amclPose, type: "geometry_msgs/msg/PoseWithCovarianceStamped", throttleMs: 200 }, (m) => {
         const p = m.pose.pose;
         S().set({ mapPose: { x: p.position.x, y: p.position.y, yaw: yawOf(p.orientation) } });
+      });
+      sub({ topic: T.mapList, type: "std_msgs/msg/String" }, (m) => {
+        const v = parseStatus(m.data);
+        if (typeof v !== "object") return;
+        const mm = v as unknown as MapManagerState;
+        // 접속 직후 받은 지난 메시지는 기록하지 않음
+        const prev = S().mapManager;
+        if (prev && mm.msg && mm.msg !== prev.msg)
+          S().log(/실패|오류|없습니다|않았습니다|없어|못했/.test(mm.msg) ? "warn" : "info", `지도: ${mm.msg}`);
+        S().set({ mapManager: mm });
       });
       sub({ topic: T.battery, type: "sensor_msgs/msg/BatteryState", throttleMs: 1000 }, (m) => {
         const pct = typeof m.percentage === "number" && isFinite(m.percentage) ? (m.percentage > 1 ? m.percentage / 100 : m.percentage) : null;

@@ -109,7 +109,7 @@ python3 image_to_rtsp.py --ros-args -p image_topic:=/camera/image_raw -p fps:=15
 | 헤더 | 연결 상태, 재연결, 설정, **E-STOP** (단축키 `Space`) |
 | 카메라 | WHEP/MJPEG, 스냅샷 저장, 전체화면, 조준선 |
 | 3D 뷰 | odom 프레임. 로봇 따라가기 / 위에서 보기 / 격자 토글 |
-| 실내 맵 | `/map` + `/amcl_pose`(없으면 odom). 🚩 누르고 지도에서 **누른 곳 = 위치, 끌기 = 방향** → `/goal_pose` |
+| 실내 맵 | `/map` + `/amcl_pose`(없으면 odom). 📂 지도 불러오기(아래 5-1), ⌖ 초기 위치 → `/initialpose`, 🚩 목표 → `/goal_pose` (**누른 곳 = 위치, 끌기 = 방향**), ⏹ 주행 취소 |
 | 실외 GPS | `/fix` 궤적. `NEXT_PUBLIC_MAPBOX_TOKEN` 이 있으면 Mapbox, 없으면 CARTO dark |
 | 원격 조종 | 가상 조이스틱 / WASD·방향키, 속도 한계 슬라이더 |
 | 자율 주행 · 팔 | `/walle/drive_mode`, `/walle/command`, 관절 바, 줍기·내려놓기 좌표 |
@@ -118,8 +118,36 @@ python3 image_to_rtsp.py --ros-args -p image_topic:=/camera/image_raw -p fps:=15
 안전 규칙
 - 조종은 **누르고 있는 동안만** 10 Hz 로 `cmd_vel` 발행(데드맨). 떼거나 탭 전환·창 포커스를 잃으면 0 을 3번 보내고 중단.
 - 조종을 시작하면 walle_vision 을 `idle` 로 돌려 `cmd_vel` 이 두 곳에서 나오지 않게 합니다.
-- E-STOP: 정지 5회 + 팔 `stop` + 주행 `idle` + 조종 잠금. 다시 눌러야 풀립니다.
+- E-STOP: 정지 5회 + 팔 `stop` + 주행 `idle` + Nav2 목표 취소 + 조종 잠금. 다시 눌러야 풀립니다.
 - 브라우저 쪽 안전장치는 보조 수단입니다. walle_vision 의 LiDAR 안전정지, walle_arm 의 motion_lock 이 1차 방어선입니다.
+
+### 5-1. tb3_lidar_mapper 지도로 Nav2 주행
+
+아이폰 TB3 Mapper 앱이 만든 `~/maps/<이름>.yaml + .pgm` 을 대시보드에서 골라 바로 주행합니다.
+`robot-side/map_manager.py` 가 지도 목록을 알려 주고, Nav2 를 그 지도로 띄우거나(이미 떠 있으면 `/map_server/load_map` 으로 교체)
+초기 위치를 넣어 줍니다.
+
+```bash
+# [SBC] 수신 서버를 SBC 에 두면 앱에서 바로 ~/maps 로 업로드됩니다
+python3 ~/tb3_lidar_mapper_tools/tb3_map_receiver.py
+# [SBC] start_robot_side.sh 가 함께 띄움. 단독 실행:
+sudo apt install ros-jazzy-navigation2 ros-jazzy-nav2-bringup ros-jazzy-turtlebot3-navigation2
+python3 robot-side/map_manager.py --ros-args -p maps_dir:=$HOME/maps \
+  -p params_file:=$HOME/walle_nav/burger_home.yaml    # 생략하면 turtlebot3_navigation2 의 ${TURTLEBOT3_MODEL}.yaml
+```
+
+1. 로봇을 **출발 테이프 위, 화살표 방향**으로 둡니다 (지도 원점 = 출발 자리).
+2. 실내 맵 📂 → 지도 고르고 **불러오기**. 'Nav2 시작 중' → '실행 중' (Pi 4 에서 30–60 초).
+   '출발 자리를 초기 위치로' 가 켜져 있으면 `home.yaml`·`_meta.json` 의 초기 yaw 로 `/initialpose` 를 보냅니다.
+3. 레이저 점이 벽과 어긋나면 ⌖ 로 로봇 자리를 누르고 바라보는 방향으로 끌어 초기 위치를 다시 넣습니다.
+4. 🚩 로 목표 지정. 주행 중엔 ⏹ 로 취소. E-STOP 도 Nav2 목표를 함께 취소합니다.
+
+| 토픽 | 방향 | 내용 |
+|---|---|---|
+| `/dashboard/maps` | 로봇 → 웹 | JSON: 지도 목록, 불러온 지도, Nav2 상태(off/starting/active), 주행 상태, 메시지 |
+| `/dashboard/map_cmd` | 웹 → 로봇 | JSON: `{"action":"load","name":"home","initial_pose":true}` · `cancel` · `stop_nav2` · `refresh` |
+
+Nav2 를 PC 에서 직접 띄웠다면 map_manager 는 지도 교체·초기 위치·취소만 하고, 'Nav2 끄기' 는 자기가 띄운 경우에만 보입니다.
 
 ## 6. 설정 메모
 
@@ -139,7 +167,7 @@ lib/transport/       types.ts (공통 인터페이스) · rosbridge.ts · mqtt.t
 lib/useConnection.ts 구독 등록 → zustand 스토어
 lib/ros.ts           메시지 변환(LaserScan, PointCloud2, 쿼터니언), 명령 발행, 비상정지
 lib/gestures.ts      walle_arm 명령·walle_vision 모드 목록, 시뮬레이터 키프레임
-robot-side/          ros2_mqtt_bridge.py + bridge.yaml, image_to_rtsp.py, mediamtx.yml, go2rtc.yaml,
+robot-side/          ros2_mqtt_bridge.py + bridge.yaml, map_manager.py (지도·Nav2), image_to_rtsp.py, mediamtx.yml, go2rtc.yaml,
                      mosquitto.conf, start_robot_side.sh
                      autostart/ — systemd 자동 실행 (install.sh, tb3ctl, tb3-run.sh, tb3@.service.in)
 ```

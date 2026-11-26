@@ -9,6 +9,7 @@ const TOPIC_LABELS: [keyof TopicNames, string][] = [
   ["battery", "BatteryState"], ["jointStates", "JointState (팔)"], ["gps", "NavSatFix (실외)"],
   ["pointCloud", "PointCloud2 (비우면 끔)"], ["walleStatus", "walle_arm 상태"], ["visionStatus", "walle_vision 상태"],
   ["cmdVel", "cmd_vel"], ["walleCommand", "팔 명령"], ["driveMode", "주행 모드"], ["goalPose", "Nav2 목표"], ["pickPoint", "줍기 좌표"],
+  ["initialPose", "AMCL 초기 위치"], ["mapList", "지도 목록 (map_manager)"], ["mapCmd", "지도 명령 (map_manager)"],
 ];
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {

@@ -1,11 +1,11 @@
 "use client";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
-import { Building2, Flag, LocateFixed, Map as MapIcon, Satellite } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Building2, CircleStop, Crosshair, Flag, FolderOpen, LocateFixed, Map as MapIcon, RefreshCw, Satellite } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { useRobot } from "@/lib/store";
-import { sendGoal } from "@/lib/ros";
+import { sendGoal, sendInitialPose, sendMapCmd } from "@/lib/ros";
 import { Chip, IconBtn, Panel } from "./Panel";
 
 const robotIcon = (color: string) =>
@@ -50,13 +50,18 @@ function gridToDataUrl(g: NonNullable<ReturnType<typeof useRobot.getState>["map"
   return c.toDataURL();
 }
 
-function IndoorLayers({ goalMode, follow, onGoalSent }: { goalMode: boolean; follow: boolean; onGoalSent: () => void }) {
+/** 지도 위 지정 도구: Nav2 목표(/goal_pose) 또는 AMCL 초기 위치(/initialpose) */
+type Tool = "none" | "goal" | "pose";
+const TOOL_COLOR = { goal: "#f5b33d", pose: "#5aa9ff" } as const;
+
+function IndoorLayers({ tool, follow, onDone }: { tool: Tool; follow: boolean; onDone: () => void }) {
   const map = useMap();
   const overlay = useRef<L.ImageOverlay | null>(null);
   const marker = useRef<L.Marker | null>(null);
   const trail = useRef<L.Polyline | null>(null);
   const goalArrow = useRef<L.Polyline | null>(null);
   const fitted = useRef(false);
+  const lastBounds = useRef("");
   const follows = useRef(follow);
   follows.current = follow;
 
@@ -79,7 +84,10 @@ function IndoorLayers({ goalMode, follow, onGoalSent }: { goalMode: boolean; fol
         else { overlay.current.setUrl(url); overlay.current.setBounds(b); }
         const el = overlay.current.getElement();
         if (el) el.style.imageRendering = "pixelated";
-        if (!fitted.current) { map.fitBounds(b, { padding: [10, 10] }); fitted.current = true; }
+        // 다른 지도를 불러오면(크기·원점이 바뀌면) 다시 맞춤
+        const key = `${g.width}x${g.height}@${g.originX},${g.originY},${g.resolution}`;
+        if (!fitted.current || key !== lastBounds.current) { map.fitBounds(b, { padding: [10, 10] }); fitted.current = true; }
+        lastBounds.current = key;
       }
       const p = s.mapPose ?? s.odom;
       if (p && marker.current) {
@@ -103,9 +111,10 @@ function IndoorLayers({ goalMode, follow, onGoalSent }: { goalMode: boolean; fol
     };
   }, [map]);
 
-  // 목표 지정: 누른 곳 = 위치, 끌어서 방향
+  // 목표·초기 위치 지정: 누른 곳 = 위치, 끌어서 방향
   useEffect(() => {
-    if (!goalMode) return;
+    if (tool === "none") return;
+    goalArrow.current?.setStyle({ color: TOOL_COLOR[tool] });
     map.dragging.disable();
     map.getContainer().style.cursor = "crosshair";
     let start: L.LatLng | null = null;
@@ -120,11 +129,12 @@ function IndoorLayers({ goalMode, follow, onGoalSent }: { goalMode: boolean; fol
         const p = useRobot.getState().mapPose ?? useRobot.getState().odom;
         yaw = p ? Math.atan2(start.lat - p.y, start.lng - p.x) : 0;
       }
-      sendGoal(start.lng, start.lat, yaw);
+      if (tool === "goal") sendGoal(start.lng, start.lat, yaw);
+      else sendInitialPose(start.lng, start.lat, yaw);
       const s = start;
       start = null;
       setTimeout(() => goalArrow.current?.setLatLngs([s, [s.lat + Math.sin(yaw) * 0.3, s.lng + Math.cos(yaw) * 0.3]]), 0);
-      onGoalSent();
+      onDone();
     };
     map.on("mousedown", down); map.on("mousemove", move); map.on("mouseup", up);
     return () => {
@@ -132,7 +142,7 @@ function IndoorLayers({ goalMode, follow, onGoalSent }: { goalMode: boolean; fol
       map.dragging.enable();
       map.getContainer().style.cursor = "";
     };
-  }, [goalMode, map, onGoalSent]);
+  }, [tool, map, onDone]);
 
   return null;
 }
@@ -162,14 +172,74 @@ function OutdoorLayers({ follow }: { follow: boolean }) {
   return null;
 }
 
+const NAV2_LABEL = { off: "Nav2 꺼짐", starting: "Nav2 시작 중", active: "Nav2 실행 중" } as const;
+
+/** robot-side/map_manager.py 의 지도 목록 — tb3_lidar_mapper 가 ~/maps 에 저장한 지도를 Nav2 로 불러오기 */
+function MapPicker({ onClose }: { onClose: () => void }) {
+  const mm = useRobot((s) => s.mapManager);
+  const [initPose, setInitPose] = useState(true);
+  return (
+    <div className="absolute right-2 top-2 z-[600] w-72 max-w-[calc(100%-16px)] rounded-md border border-ink-600 bg-ink-900/95 p-2 text-xs shadow-xl backdrop-blur">
+      <div className="mb-1.5 flex items-center gap-1.5">
+        <span className="font-semibold text-ink-100">지도 불러오기</span>
+        {mm && <Chip tone={mm.nav2 === "active" ? "ok" : mm.nav2 === "starting" ? "warn" : "muted"}>{NAV2_LABEL[mm.nav2] ?? mm.nav2}</Chip>}
+        <button title="목록 새로고침" onClick={() => sendMapCmd({ action: "refresh" })} className="ml-auto text-ink-400 hover:text-ink-100">
+          <RefreshCw className="size-3.5" />
+        </button>
+        <button onClick={onClose} className="px-1 text-ink-400 hover:text-ink-100">✕</button>
+      </div>
+      {!mm ? (
+        <p className="leading-snug text-ink-400">
+          지도 관리 노드 응답 없음. 로봇에서 <code className="text-ink-200">robot-side/map_manager.py</code> 를 실행하세요.
+        </p>
+      ) : (
+        <>
+          <div className="mb-1 truncate font-mono text-[10px] text-ink-400" title={mm.dir}>{mm.dir}</div>
+          <ul className="max-h-48 space-y-1 overflow-y-auto">
+            {mm.maps.length === 0 && <li className="text-ink-400">지도가 없습니다 — TB3 Mapper 앱에서 업로드하세요</li>}
+            {mm.maps.map((m) => (
+              <li key={m.name} className={`flex items-center gap-2 rounded px-1.5 py-1 ${mm.loaded === m.name ? "bg-signal/10" : "hover:bg-ink-800"}`}>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono text-ink-100">{m.name}{mm.loaded === m.name && <span className="ml-1 text-signal">●</span>}</div>
+                  {m.error ? <div className="text-[10px] text-alert">{m.error}</div> : <div className="text-[10px] text-ink-400">
+                    {m.width_m != null ? `${m.width_m}×${m.height_m} m · ` : ""}{(m.res * 100).toFixed(0)} cm · yaw {((m.yaw * 180) / Math.PI).toFixed(1)}° · {new Date(m.mtime * 1000).toLocaleDateString()}
+                  </div>}
+                </div>
+                <button disabled={mm.busy || !!m.error} onClick={() => sendMapCmd({ action: "load", name: m.name, initial_pose: initPose })}
+                  className="rounded bg-signal px-2 py-1 text-[11px] font-semibold text-ink-950 disabled:opacity-40">
+                  {mm.loaded === m.name ? "다시" : "불러오기"}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <label className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-300">
+            <input type="checkbox" checked={initPose} onChange={(e) => setInitPose(e.target.checked)} />
+            출발 자리(0, 0)를 초기 위치로 — 로봇을 출발 테이프 위에 두세요
+          </label>
+          {mm.msg && <p className={`mt-1.5 leading-snug ${mm.busy ? "text-amber" : "text-ink-300"}`}>{mm.busy ? "⏳ " : ""}{mm.msg}</p>}
+          {mm.managed && mm.nav2 !== "off" && (
+            <button onClick={() => sendMapCmd({ action: "stop_nav2" })} disabled={mm.busy}
+              className="mt-2 w-full rounded border border-ink-600 py-1 text-[11px] text-ink-300 hover:text-ink-100 disabled:opacity-40">Nav2 끄기</button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function MapPanel() {
   const [mode, setMode] = useState<"indoor" | "outdoor">("indoor");
-  const [goalMode, setGoalMode] = useState(false);
+  const [tool, setTool] = useState<Tool>("none");
+  const [picker, setPicker] = useState(false);
   const [follow, setFollow] = useState(true);
   const hasMap = useRobot((s) => !!s.map);
   const hasAmcl = useRobot((s) => !!s.mapPose);
+  const loaded = useRobot((s) => s.mapManager?.loaded ?? null);
+  const navActive = useRobot((s) => s.mapManager?.nav === "active");
   const gps = useRobot((s) => s.gps);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const toggleTool = (t: Tool) => setTool((v) => (v === t ? "none" : t));
+  const onDone = useCallback(() => setTool("none"), []);
 
   return (
     <Panel
@@ -179,17 +249,30 @@ export default function MapPanel() {
       right={
         <>
           {mode === "indoor" ? (
-            <Chip tone={hasMap ? "ok" : "muted"}>{hasMap ? (hasAmcl ? "map · amcl" : "map · odom") : "map 없음"}</Chip>
+            <Chip tone={hasMap ? "ok" : "muted"}>{hasMap ? `${loaded ?? "map"} · ${hasAmcl ? "amcl" : "odom"}` : "map 없음"}</Chip>
           ) : (
             <Chip tone={gps ? (gps.fix >= 0 ? "ok" : "warn") : "muted"}>{gps ? (gps.fix >= 1 ? "RTK/DGPS" : gps.fix === 0 ? "GPS FIX" : "NO FIX") : "GPS 없음"}</Chip>
           )}
           {mode === "indoor" && (
-            <IconBtn title="Nav2 목표 지정 (누르고 끌어서 방향)" active={goalMode} onClick={() => setGoalMode((v) => !v)}>
-              <Flag className="size-3.5" />
-            </IconBtn>
+            <>
+              <IconBtn title="지도 불러오기 (tb3_lidar_mapper)" active={picker} onClick={() => setPicker((v) => !v)}>
+                <FolderOpen className="size-3.5" />
+              </IconBtn>
+              <IconBtn title="초기 위치 지정 (누르고 끌어서 방향)" active={tool === "pose"} onClick={() => toggleTool("pose")}>
+                <Crosshair className="size-3.5" />
+              </IconBtn>
+              <IconBtn title="Nav2 목표 지정 (누르고 끌어서 방향)" active={tool === "goal"} onClick={() => toggleTool("goal")}>
+                <Flag className="size-3.5" />
+              </IconBtn>
+              {navActive && (
+                <IconBtn title="주행 취소" onClick={() => sendMapCmd({ action: "cancel" })}>
+                  <CircleStop className="size-3.5 text-alert" />
+                </IconBtn>
+              )}
+            </>
           )}
           <IconBtn title="로봇 따라가기" active={follow} onClick={() => setFollow((v) => !v)}><LocateFixed className="size-3.5" /></IconBtn>
-          <IconBtn title={mode === "indoor" ? "실외 지도로" : "실내 맵으로"} onClick={() => { setMode((m) => (m === "indoor" ? "outdoor" : "indoor")); setGoalMode(false); }}>
+          <IconBtn title={mode === "indoor" ? "실외 지도로" : "실내 맵으로"} onClick={() => { setMode((m) => (m === "indoor" ? "outdoor" : "indoor")); setTool("none"); setPicker(false); }}>
             {mode === "indoor" ? <Satellite className="size-3.5" /> : <Building2 className="size-3.5" />}
           </IconBtn>
         </>
@@ -198,7 +281,7 @@ export default function MapPanel() {
       {mode === "indoor" ? (
         <MapContainer key="indoor" crs={L.CRS.Simple} center={[0, 0]} zoom={6} minZoom={2} maxZoom={10}
           zoomSnap={0.25} attributionControl={false} className="grid-bg h-full w-full">
-          <IndoorLayers goalMode={goalMode} follow={follow} onGoalSent={() => setGoalMode(false)} />
+          <IndoorLayers tool={tool} follow={follow} onDone={onDone} />
         </MapContainer>
       ) : (
         <MapContainer key="outdoor" center={[37.5665, 126.978]} zoom={17} maxZoom={21} className="h-full w-full">
@@ -214,9 +297,10 @@ export default function MapPanel() {
           <OutdoorLayers follow={follow} />
         </MapContainer>
       )}
-      {goalMode && (
-        <div className="pointer-events-none absolute left-1/2 top-2 z-[500] -translate-x-1/2 rounded bg-amber px-2 py-1 text-[11px] font-medium text-ink-950">
-          지도에서 목표 위치를 누르고, 끌어서 방향을 정하세요
+      {mode === "indoor" && picker && <MapPicker onClose={() => setPicker(false)} />}
+      {tool !== "none" && (
+        <div className={`pointer-events-none absolute left-1/2 top-2 z-[500] -translate-x-1/2 rounded px-2 py-1 text-[11px] font-medium text-ink-950 ${tool === "goal" ? "bg-amber" : "bg-[#5aa9ff]"}`}>
+          {tool === "goal" ? "지도에서 목표 위치를 누르고, 끌어서 방향을 정하세요" : "로봇이 있는 곳을 누르고, 로봇이 보는 방향으로 끄세요"}
         </div>
       )}
     </Panel>
