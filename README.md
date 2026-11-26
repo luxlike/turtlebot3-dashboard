@@ -111,7 +111,7 @@ python3 image_to_rtsp.py --ros-args -p image_topic:=/camera/image_raw -p fps:=15
 | 3D 뷰 | odom 프레임. 로봇 따라가기 / 위에서 보기 / 격자 토글 |
 | 실내 맵 | `/map` + `/amcl_pose`(없으면 odom). 📂 지도 불러오기(아래 5-1), ⌖ 초기 위치 → `/initialpose`, 🚩 목표 → `/goal_pose` (**누른 곳 = 위치, 끌기 = 방향**), ⏹ 주행 취소 |
 | 실외 GPS | `/fix` 궤적. `NEXT_PUBLIC_MAPBOX_TOKEN` 이 있으면 Mapbox, 없으면 CARTO dark |
-| 원격 조종 | 가상 조이스틱 / WASD·방향키, 속도 한계 슬라이더 |
+| 원격 조종 | 가상 조이스틱 / WASD·방향키 / Xbox 컨트롤러, 속도 한계 슬라이더 |
 | 자율 주행 · 팔 | `/walle/drive_mode`, `/walle/command`, 관절 바, 줍기·내려놓기 좌표 |
 | 텔레메트리 | 배터리(3S 11.0 V 경고), 속도, 포즈, 토픽별 수신 Hz, walle 상태 JSON |
 
@@ -119,6 +119,10 @@ python3 image_to_rtsp.py --ros-args -p image_topic:=/camera/image_raw -p fps:=15
 - 조종은 **누르고 있는 동안만** 10 Hz 로 `cmd_vel` 발행(데드맨). 떼거나 탭 전환·창 포커스를 잃으면 0 을 3번 보내고 중단.
 - 조종을 시작하면 walle_vision 을 `idle` 로 돌려 `cmd_vel` 이 두 곳에서 나오지 않게 합니다.
 - E-STOP: 정지 5회 + 팔 `stop` + 주행 `idle` + Nav2 목표 취소 + 조종 잠금. 다시 눌러야 풀립니다.
+- Xbox 컨트롤러: 대시보드를 연 PC 에 블루투스·USB 로 연결하고 아무 버튼이나 누르면 인식됩니다(Gamepad API).
+  **LB 를 누르고 있는 동안만** 발행 · 왼쪽 스틱 ↕ 전진/후진 · 오른쪽 스틱 ↔ 회전 · RB 최대 속도 · **B 비상정지** · 십자키 ↕ 속도 한계 ±5%.
+  LB 를 떼거나, 창 포커스를 잃거나, 컨트롤러가 끊기면 즉시 정지합니다. E-STOP 해제는 화면에서만 됩니다.
+  Chrome/Edge 권장(standard 매핑). Firefox 는 http 로 연 페이지에서 Gamepad API 를 막으므로 localhost·https 로 열어야 합니다.
 - 브라우저 쪽 안전장치는 보조 수단입니다. walle_vision 의 LiDAR 안전정지, walle_arm 의 motion_lock 이 1차 방어선입니다.
 
 ### 5-1. tb3_lidar_mapper 지도로 Nav2 주행
